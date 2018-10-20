@@ -63,15 +63,6 @@ class ArticlesTable extends Table
         return $query->group(['Articles.id']);
     }
 
-    public function beforeSave($event, $entity, $options)
-    {
-        if ($entity->tag_string) {
-            $entity->tags = $this->_buildTags($entity->tag_string);
-        }
-
-        // Other code
-    }
-
     protected function _buildTags($tagString)
     {
         // Trim tags
