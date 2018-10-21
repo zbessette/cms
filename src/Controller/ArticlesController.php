@@ -14,6 +14,7 @@ class ArticlesController extends AppController
 
         $this->loadComponent('Paginator');
         $this->loadComponent('Flash'); // Include the FlashComponent
+        $this->Auth->allow(['tags']);
 
     }
 
@@ -35,9 +36,8 @@ class ArticlesController extends AppController
         if ($this->request->is('post')) {
             $article = $this->Articles->patchEntity($article, $this->request->getData());
 
-            // Hardcoding the user_id is temporary, and will be removed later
-            // when we build authentication out.
-            $article->user_id = 1;
+            // Changed: Set the user_id from the session.
+            $article->user_id = $this->Auth->user('id');
 
             if ($this->Articles->save($article)) {
                 $this->Flash->success(__('Your article has been saved.'));
@@ -45,12 +45,6 @@ class ArticlesController extends AppController
             }
             $this->Flash->error(__('Unable to add your article.'));
         }
-        // Get a list of tags.
-        $tags = $this->Articles->Tags->find('list');
-
-        // Set tags to the view context
-        $this->set('tags', $tags);
-
         $this->set('article', $article);
     }
 
@@ -60,24 +54,21 @@ class ArticlesController extends AppController
             ->findBySlug($slug)
             ->contain('Tags') // load associated Tags
             ->firstOrFail();
+
         if ($this->request->is(['post', 'put'])) {
-            $this->Articles->patchEntity($article, $this->request->getData());
+            $this->Articles->patchEntity($article, $this->request->getData(), [
+                // Added: Disable modification of user_id.
+                'accessibleFields' => ['user_id' => false]
+            ]);
             if ($this->Articles->save($article)) {
                 $this->Flash->success(__('Your article has been updated.'));
                 return $this->redirect(['action' => 'index']);
             }
             $this->Flash->error(__('Unable to update your article.'));
         }
-
-        // Get a list of tags.
-        $tags = $this->Articles->Tags->find('list');
-
-        // Set tags to the view context
-        $this->set('tags', $tags);
-
         $this->set('article', $article);
     }
-
+    
     public function delete($slug)
     {
         $this->request->allowMethod(['post', 'delete']);
@@ -107,5 +98,24 @@ class ArticlesController extends AppController
         ]);
     }
 
+    public function isAuthorized($user)
+    {
+        $action = $this->request->getParam('action');
+        // The add and tags actions are always allowed to logged in users.
+        if (in_array($action, ['add', 'tags'])) {
+            return true;
+        }
+
+        // All other actions require a slug.
+        $slug = $this->request->getParam('pass.0');
+        if (!$slug) {
+            return false;
+        }
+
+        // Check that the article belongs to the current user.
+        $article = $this->Articles->findBySlug($slug)->first();
+
+        return $article->user_id === $user['id'];
+    }
 }
 ?>
